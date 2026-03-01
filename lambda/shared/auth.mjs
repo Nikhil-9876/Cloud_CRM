@@ -22,13 +22,32 @@ export const CORS_HEADERS = {
 
 /**
  * Build a standard API Gateway response object.
+ * Error bodies are normalised to { error: true, message: "...", code: "..." }.
  */
 export function respond(statusCode, body = null) {
+  // Normalise error shape so the frontend always gets a consistent format
+  if (body && typeof body === 'object' && !Array.isArray(body) && (body.error || statusCode >= 400)) {
+    // If the caller passed a plain string under `error`, lift it to `message`
+    if (typeof body.error === 'string') {
+      body = { error: true, message: body.error, code: body.code ?? httpCodeName(statusCode) }
+    } else if (body.message && body.error !== true) {
+      body = { error: true, message: body.message, code: body.code ?? httpCodeName(statusCode) }
+    }
+  }
   return {
     statusCode,
     headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     body: body === null ? '' : JSON.stringify(body),
   }
+}
+
+function httpCodeName(code) {
+  const names = {
+    400: 'BAD_REQUEST', 401: 'UNAUTHORIZED', 403: 'FORBIDDEN',
+    404: 'NOT_FOUND', 409: 'CONFLICT', 422: 'UNPROCESSABLE_ENTITY',
+    500: 'INTERNAL_ERROR',
+  }
+  return names[code] ?? `HTTP_${code}`
 }
 
 /**

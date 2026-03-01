@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import Modal from '../components/Modal'
+import Skeleton from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
+import ErrorState from '../components/ErrorState'
+import Button from '../components/Button'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 
@@ -19,6 +23,7 @@ const emptyForm = { name: '', email: '', source: 'Website', status: 'New', assig
 const Leads = () => {
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [tab, setTab] = useState('All')
   const [modalOpen, setModalOpen] = useState(false)
   const [editLead, setEditLead] = useState(null)
@@ -27,10 +32,12 @@ const Leads = () => {
 
   const fetchLeads = async () => {
     setLoading(true)
+    setError(null)
     try {
       const data = await api.get('/leads')
       setLeads(data ?? [])
     } catch (err) {
+      setError(err.message)
       toast.error(err.message)
     } finally {
       setLoading(false)
@@ -121,15 +128,12 @@ const Leads = () => {
           <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
           <p className="text-gray-500 mt-1">{leads.length} total leads</p>
         </div>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 rounded-lg transition-colors text-sm"
-        >
+        <Button onClick={openAdd}>
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Add Lead
-        </button>
+        </Button>
       </div>
 
       {/* Status tabs */}
@@ -151,85 +155,98 @@ const Leads = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center text-gray-400">No leads found</div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="text-left px-6 py-3 font-semibold text-gray-600">Name</th>
-                <th className="text-left px-6 py-3 font-semibold text-gray-600">Email</th>
-                <th className="text-left px-6 py-3 font-semibold text-gray-600">Source</th>
-                <th className="text-left px-6 py-3 font-semibold text-gray-600">Status</th>
-                <th className="text-left px-6 py-3 font-semibold text-gray-600">Assigned To</th>
-                <th className="text-left px-6 py-3 font-semibold text-gray-600">Created</th>
-                <th className="px-6 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.map((l) => (
-                <tr key={l.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-3 font-medium text-gray-900">{l.name}</td>
-                  <td className="px-6 py-3 text-gray-500">{l.email || '—'}</td>
-                  <td className="px-6 py-3 text-gray-500">{l.source || '—'}</td>
-                  <td className="px-6 py-3">
-                    <select
-                      value={l.status}
-                      onChange={(e) => handleStatusChange(l.id, e.target.value)}
-                      className={`text-xs font-semibold px-2 py-1 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${statusColors[l.status] ?? 'bg-gray-100 text-gray-700'}`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {STATUSES.slice(1).map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-6 py-3 text-gray-500">{l.assigned_to || '—'}</td>
-                  <td className="px-6 py-3 text-gray-400">{format(new Date(l.created_at), 'MMM d, yyyy')}</td>
-                  <td className="px-6 py-3">
-                    <div className="flex items-center gap-2 justify-end">
-                      {l.status !== 'Dropped' && (
-                        <button
-                          onClick={() => handleConvert(l)}
-                          className="text-gray-400 hover:text-green-600 transition-colors p-1"
-                          title="Convert to Contact"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                          </svg>
-                        </button>
-                      )}
-                      <button
-                        onClick={() => openEdit(l)}
-                        className="text-gray-400 hover:text-blue-600 transition-colors p-1"
-                        title="Edit"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(l.id)}
-                        className="text-gray-400 hover:text-red-600 transition-colors p-1"
-                        title="Delete"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </td>
+      {loading ? (
+        <Skeleton.Table rows={5} cols={6} />
+      ) : error ? (
+        <ErrorState message={error} onRetry={fetchLeads} />
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+          <EmptyState
+            title={tab !== 'All' ? `No ${tab} leads` : 'No leads yet'}
+            description={tab !== 'All' ? `No leads with status "${tab}" found.` : 'Start tracking potential customers by adding your first lead.'}
+            action={tab === 'All' && <Button onClick={openAdd} size="sm">Add Lead</Button>}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Desktop table */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hidden md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Name</th>
+                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Email</th>
+                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Source</th>
+                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Status</th>
+                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Assigned To</th>
+                  <th className="text-left px-6 py-3 font-semibold text-gray-600">Created</th>
+                  <th className="px-6 py-3"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.map((l) => (
+                  <tr key={l.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-3 font-medium text-gray-900">{l.name}</td>
+                    <td className="px-6 py-3 text-gray-500">{l.email || '—'}</td>
+                    <td className="px-6 py-3 text-gray-500">{l.source || '—'}</td>
+                    <td className="px-6 py-3">
+                      <select
+                        value={l.status}
+                        onChange={(e) => handleStatusChange(l.id, e.target.value)}
+                        className={`text-xs font-semibold px-2 py-1 rounded-full border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer ${statusColors[l.status] ?? 'bg-gray-100 text-gray-700'}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {STATUSES.slice(1).map((s) => (<option key={s} value={s}>{s}</option>))}
+                      </select>
+                    </td>
+                    <td className="px-6 py-3 text-gray-500">{l.assigned_to || '—'}</td>
+                    <td className="px-6 py-3 text-gray-400">{format(new Date(l.created_at), 'MMM d, yyyy')}</td>
+                    <td className="px-6 py-3">
+                      <div className="flex items-center gap-2 justify-end">
+                        {l.status !== 'Dropped' && (
+                          <button onClick={() => handleConvert(l)} className="text-gray-400 hover:text-green-600 transition-colors p-1" title="Convert to Contact">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
+                          </button>
+                        )}
+                        <button onClick={() => openEdit(l)} className="text-gray-400 hover:text-blue-600 transition-colors p-1" title="Edit">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        </button>
+                        <button onClick={() => handleDelete(l.id)} className="text-gray-400 hover:text-red-600 transition-colors p-1" title="Delete">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile card list */}
+          <div className="space-y-3 md:hidden">
+            {filtered.map((l) => (
+              <div key={l.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 truncate">{l.name}</p>
+                    <p className="text-xs text-gray-500 truncate mt-0.5">{l.email || l.source || '—'}</p>
+                  </div>
+                  <span className={`text-xs font-semibold px-2 py-1 rounded-full flex-shrink-0 ${statusColors[l.status] ?? 'bg-gray-100 text-gray-700'}`}>
+                    {l.status}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mt-3 pt-2 border-t border-gray-50">
+                  {l.status !== 'Dropped' && (
+                    <button onClick={() => handleConvert(l)} className="flex-1 text-center text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-lg py-1.5 transition-colors">Convert</button>
+                  )}
+                  <button onClick={() => openEdit(l)} className="flex-1 text-center text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg py-1.5 transition-colors">Edit</button>
+                  <button onClick={() => handleDelete(l.id)} className="flex-1 text-center text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg py-1.5 transition-colors">Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Modal */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editLead ? 'Edit Lead' : 'Add Lead'}>
@@ -292,12 +309,8 @@ const Leads = () => {
             />
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setModalOpen(false)} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium">
-              Cancel
-            </button>
-            <button type="submit" disabled={saving} className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-sm font-medium transition-colors">
-              {saving ? 'Saving…' : editLead ? 'Update' : 'Add Lead'}
-            </button>
+            <Button type="button" variant="secondary" className="flex-1" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button type="submit" loading={saving} className="flex-1">{editLead ? 'Update' : 'Add Lead'}</Button>
           </div>
         </form>
       </Modal>

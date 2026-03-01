@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import toast from 'react-hot-toast'
@@ -53,6 +54,7 @@ const navItems = [
 const Layout = () => {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const handleLogout = async () => {
     await signOut()
@@ -60,10 +62,27 @@ const Layout = () => {
     navigate('/login')
   }
 
+  const closeSidebar = () => setSidebarOpen(false)
+
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      {/* Sidebar */}
-      <aside className="w-64 flex-shrink-0 bg-[#1e2a4a] flex flex-col">
+      {/* ── Mobile backdrop ──────────────────────────────────────────────── */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/50 md:hidden"
+          onClick={closeSidebar}
+        />
+      )}
+
+      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-30 w-64 flex-shrink-0 bg-[#1e2a4a] flex flex-col
+          transform transition-transform duration-200 ease-in-out
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:relative md:translate-x-0 md:z-auto
+        `}
+      >
         {/* Logo */}
         <div className="px-6 py-6 border-b border-white/10">
           <div className="flex items-center gap-3">
@@ -82,6 +101,7 @@ const Layout = () => {
             <NavLink
               key={item.to}
               to={item.to}
+              onClick={closeSidebar}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   isActive
@@ -114,12 +134,25 @@ const Layout = () => {
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* ── Main content ─────────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top bar */}
-        <header className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between shadow-sm flex-shrink-0">
-          <div className="text-sm text-gray-500">
-            Welcome back, <span className="font-medium text-gray-800">{user?.signInDetails?.loginId}</span>
+        <header className="bg-white border-b border-gray-200 px-4 md:px-8 py-4 flex items-center justify-between shadow-sm flex-shrink-0">
+          <div className="flex items-center gap-3">
+            {/* Hamburger — only visible on mobile */}
+            <button
+              className="md:hidden p-1.5 -ml-1.5 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open menu"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div className="text-sm text-gray-500 hidden sm:block">
+              Welcome back,{' '}
+              <span className="font-medium text-gray-800">{user?.signInDetails?.loginId}</span>
+            </div>
           </div>
           <button
             onClick={handleLogout}
@@ -128,12 +161,12 @@ const Layout = () => {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-            Logout
+            <span className="hidden sm:inline">Logout</span>
           </button>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto px-8 py-6">
+        <main className="flex-1 overflow-y-auto px-4 md:px-8 py-4 md:py-6">
           <Outlet />
         </main>
       </div>

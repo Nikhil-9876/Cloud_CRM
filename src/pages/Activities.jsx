@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import Modal from '../components/Modal'
+import Skeleton from '../components/Skeleton'
+import EmptyState from '../components/EmptyState'
+import ErrorState from '../components/ErrorState'
+import Button from '../components/Button'
 import toast from 'react-hot-toast'
 import { format, isPast, parseISO } from 'date-fns'
 
@@ -28,6 +32,7 @@ const Activities = () => {
   const [contacts, setContacts] = useState([])
   const [deals, setDeals] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [tab, setTab] = useState('All')
   const [modalOpen, setModalOpen] = useState(false)
   const [editActivity, setEditActivity] = useState(null)
@@ -36,10 +41,12 @@ const Activities = () => {
 
   const fetchActivities = async () => {
     setLoading(true)
+    setError(null)
     try {
       const data = await api.get('/activities')
       setActivities(data ?? [])
     } catch (err) {
+      setError(err.message)
       toast.error(err.message)
     } finally {
       setLoading(false)
@@ -138,15 +145,12 @@ const Activities = () => {
           <h1 className="text-2xl font-bold text-gray-900">Activities</h1>
           <p className="text-gray-500 mt-1">{activities.length} total activities</p>
         </div>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 rounded-lg transition-colors text-sm"
-        >
+        <Button onClick={openAdd}>
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Add Activity
-        </button>
+        </Button>
       </div>
 
       {/* Type tabs */}
@@ -170,12 +174,16 @@ const Activities = () => {
       {/* List */}
       <div className="space-y-3">
         {loading ? (
-          <div className="flex items-center justify-center h-48">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-          </div>
+          <Skeleton.Card rows={5} />
+        ) : error ? (
+          <ErrorState message={error} onRetry={fetchActivities} />
         ) : filtered.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 py-16 text-center text-gray-400">
-            No activities found
+          <div className="bg-white rounded-2xl border border-gray-100">
+            <EmptyState
+              title={tab !== 'All' ? `No ${tab} activities` : 'No activities yet'}
+              description={tab !== 'All' ? `No ${tab.toLowerCase()} activities found.` : 'Log your first activity to start tracking your work.'}
+              action={tab === 'All' && <Button onClick={openAdd} size="sm">Add Activity</Button>}
+            />
           </div>
         ) : (
           filtered.map((a) => {
@@ -341,12 +349,8 @@ const Activities = () => {
             <label htmlFor="done" className="text-sm font-medium text-gray-700">Mark as done</label>
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setModalOpen(false)} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium">
-              Cancel
-            </button>
-            <button type="submit" disabled={saving} className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-sm font-medium transition-colors">
-              {saving ? 'Saving…' : editActivity ? 'Update' : 'Add Activity'}
-            </button>
+            <Button type="button" variant="secondary" className="flex-1" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button type="submit" loading={saving} className="flex-1">{editActivity ? 'Update' : 'Add Activity'}</Button>
           </div>
         </form>
       </Modal>

@@ -10,6 +10,9 @@ import {
 import { useDroppable, useDraggable } from '@dnd-kit/core'
 import { api } from '../lib/api'
 import Modal from '../components/Modal'
+import Skeleton from '../components/Skeleton'
+import ErrorState from '../components/ErrorState'
+import Button from '../components/Button'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 
@@ -154,6 +157,7 @@ const Pipeline = () => {
   const [deals, setDeals] = useState([])
   const [contacts, setContacts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [detailDeal, setDetailDeal] = useState(null)
   const [detailActivities, setDetailActivities] = useState([])
@@ -166,10 +170,12 @@ const Pipeline = () => {
 
   const fetchDeals = async () => {
     setLoading(true)
+    setError(null)
     try {
       const data = await api.get('/deals')
       setDeals(data ?? [])
     } catch (err) {
+      setError(err.message)
       toast.error(err.message)
     } finally {
       setLoading(false)
@@ -259,23 +265,21 @@ const Pipeline = () => {
           <h1 className="text-2xl font-bold text-gray-900">Pipeline</h1>
           <p className="text-gray-500 mt-1">Drag deals between stages</p>
         </div>
-        <button
-          onClick={() => { setForm(emptyForm); setModalOpen(true) }}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 rounded-lg transition-colors text-sm"
-        >
+        <Button onClick={() => { setForm(emptyForm); setModalOpen(true) }}>
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Add Deal
-        </button>
+        </Button>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-        </div>
+        <Skeleton.Kanban cols={6} cardsPerCol={2} />
+      ) : error ? (
+        <ErrorState message={error} onRetry={fetchDeals} />
       ) : (
-        <div className="overflow-x-auto pb-4">
+        <div className="overflow-x-auto pb-4 -mx-1 px-1">
+          <p className="text-xs text-gray-400 mb-2 md:hidden">← Scroll horizontally to see all stages</p>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -371,12 +375,8 @@ const Pipeline = () => {
             />
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setModalOpen(false)} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium">
-              Cancel
-            </button>
-            <button type="submit" disabled={saving} className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-sm font-medium transition-colors">
-              {saving ? 'Adding…' : 'Add Deal'}
-            </button>
+            <Button type="button" variant="secondary" className="flex-1" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button type="submit" loading={saving} className="flex-1">Add Deal</Button>
           </div>
         </form>
       </Modal>

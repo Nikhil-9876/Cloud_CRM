@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
+import Skeleton from '../components/Skeleton'
+import ErrorState from '../components/ErrorState'
 
 const StatCard = ({ label, value, icon, color }) => (
   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex items-center gap-4">
@@ -28,29 +30,31 @@ const Dashboard = () => {
   const [recentActivities, setRecentActivities] = useState([])
   const [overdueDeals, setOverdueDeals] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      setLoading(true)
-      try {
-        const data = await api.get('/dashboard/stats')
-        setStats({
-          contacts:          data.contacts,
-          leads:             data.leads,
-          openDeals:         data.openDeals,
-          wonThisMonth:      data.wonThisMonth,
-          pendingActivities: data.pendingActivities,
-        })
-        setRecentActivities(data.recentActivities ?? [])
-        setOverdueDeals(data.overdueDeals ?? [])
-      } catch (err) {
-        toast.error(err.message)
-      } finally {
-        setLoading(false)
-      }
+  const fetchAll = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await api.get('/dashboard/stats')
+      setStats({
+        contacts:          data.contacts,
+        leads:             data.leads,
+        openDeals:         data.openDeals,
+        wonThisMonth:      data.wonThisMonth,
+        pendingActivities: data.pendingActivities,
+      })
+      setRecentActivities(data.recentActivities ?? [])
+      setOverdueDeals(data.overdueDeals ?? [])
+    } catch (err) {
+      setError(err.message)
+      toast.error(err.message)
+    } finally {
+      setLoading(false)
     }
-    fetchAll()
-  }, [])
+  }
+
+  useEffect(() => { fetchAll() }, [])
 
   const typeColors = {
     Call: 'bg-blue-100 text-blue-700',
@@ -67,9 +71,14 @@ const Dashboard = () => {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-48">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-        </div>
+        <>
+          <Skeleton.StatRow count={5} />
+          <div className="mt-8">
+            <Skeleton.Section lines={4} />
+          </div>
+        </>
+      ) : error ? (
+        <ErrorState message={error} onRetry={fetchAll} />
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">

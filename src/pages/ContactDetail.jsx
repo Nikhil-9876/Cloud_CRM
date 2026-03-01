@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
+import Skeleton from '../components/Skeleton'
+import ErrorState from '../components/ErrorState'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 
@@ -27,33 +29,60 @@ const ContactDetail = () => {
   const [deals, setDeals] = useState([])
   const [activities, setActivities] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      setLoading(true)
-      try {
-        const [contact, deals, activities] = await Promise.all([
-          api.get(`/contacts/${id}`),
-          api.get(`/contacts/${id}/deals`),
-          api.get(`/contacts/${id}/activities`),
-        ])
-        setContact(contact)
-        setDeals(deals ?? [])
-        setActivities(activities ?? [])
-      } catch (err) {
-        toast.error('Contact not found')
-        navigate('/contacts')
-      } finally {
-        setLoading(false)
-      }
+  const fetchAll = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [contactData, dealsData, activitiesData] = await Promise.all([
+        api.get(`/contacts/${id}`),
+        api.get(`/contacts/${id}/deals`),
+        api.get(`/contacts/${id}/activities`),
+      ])
+      setContact(contactData)
+      setDeals(dealsData ?? [])
+      setActivities(activitiesData ?? [])
+    } catch (err) {
+      setError(err.message)
+      toast.error(err.message)
+    } finally {
+      setLoading(false)
     }
-    fetchAll()
-  }, [id])
+  }
+
+  useEffect(() => { fetchAll() }, [id])
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      <div>
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={() => navigate('/contacts')} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          </button>
+          <Skeleton className="h-7 w-48" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Skeleton.Section lines={5} />
+          <div className="lg:col-span-2 space-y-6">
+            <Skeleton.Section lines={3} />
+            <Skeleton.Section lines={4} />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div>
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={() => navigate('/contacts')} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          </button>
+          <span className="text-gray-400">Contact Details</span>
+        </div>
+        <ErrorState message={error} onRetry={fetchAll} />
       </div>
     )
   }
