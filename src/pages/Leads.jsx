@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { api } from '../lib/api'
 import Modal from '../components/Modal'
 import Skeleton from '../components/Skeleton'
@@ -7,6 +7,7 @@ import ErrorState from '../components/ErrorState'
 import Button from '../components/Button'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
+import { toCSV, downloadCSV, parseCSV, readFileAsText } from '../lib/csv'
 
 const STATUSES = ['All', 'New', 'Contacted', 'Qualified', 'Dropped']
 const SOURCES = ['Website', 'Cold Call', 'Referral', 'Social Media', 'Other']
@@ -20,6 +21,15 @@ const statusColors = {
 
 const emptyForm = { name: '', email: '', source: 'Website', status: 'New', assigned_to: '', notes: '' }
 
+const CSV_COLUMNS = [
+  { key: 'name',        label: 'Name' },
+  { key: 'email',       label: 'Email' },
+  { key: 'source',      label: 'Source' },
+  { key: 'status',      label: 'Status' },
+  { key: 'assigned_to', label: 'Assigned To' },
+  { key: 'notes',       label: 'Notes' },
+]
+
 const Leads = () => {
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(true)
@@ -29,6 +39,49 @@ const Leads = () => {
   const [editLead, setEditLead] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const importRef = useRef(null)
+
+  const handleExport = () => {
+    if (!leads.length) { toast.error('No leads to export'); return }
+    const csv = toCSV(leads, CSV_COLUMNS)
+    downloadCSV(csv, `leads-${new Date().toISOString().slice(0,10)}.csv`)
+    toast.success(`Exported ${leads.length} leads`)
+  }
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setImporting(true)
+    try {
+      const text = await readFileAsText(file)
+      const { rows } = parseCSV(text)
+      if (!rows.length) { toast.error('No rows found in CSV'); return }
+      let success = 0, failed = 0
+      for (const row of rows) {
+        const name = row['Name'] ?? row['name'] ?? ''
+        if (!name.trim()) { failed++; continue }
+        try {
+          await api.post('/leads', {
+            name:        name.trim(),
+            email:       row['Email']       ?? row['email']       ?? '',
+            source:      row['Source']      ?? row['source']      ?? 'Website',
+            status:      row['Status']      ?? row['status']      ?? 'New',
+            assigned_to: row['Assigned To'] ?? row['assigned_to'] ?? '',
+            notes:       row['Notes']       ?? row['notes']       ?? '',
+          })
+          success++
+        } catch { failed++ }
+      }
+      toast.success(`Imported ${success} leads${failed ? ` (${failed} skipped)` : ''}`)
+      fetchLeads()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const fetchLeads = async () => {
     setLoading(true)
@@ -128,12 +181,27 @@ const Leads = () => {
           <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
           <p className="text-gray-500 mt-1">{leads.length} total leads</p>
         </div>
-        <Button onClick={openAdd}>
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add Lead
-        </Button>
+        <div className="flex items-center gap-2">
+          <input ref={importRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
+          <Button variant="secondary" size="sm" loading={importing} onClick={() => importRef.current?.click()}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Import
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleExport}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export
+          </Button>
+          <Button onClick={openAdd}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Lead
+          </Button>
+        </div>
       </div>
 
       {/* Status tabs */}

@@ -4,6 +4,8 @@
   "type": "module",
   "description": "AWS Lambda functions for CRM — API Gateway backend",
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.0.0",
+    "@aws-sdk/client-ses": "^3.0.0",
     "aws-jwt-verify": "^4.0.1",
     "pg": "^8.13.1"
   }

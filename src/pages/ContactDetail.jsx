@@ -174,28 +174,49 @@ const ContactDetail = () => {
             )}
           </div>
 
-          {/* Activities */}
+          {/* Activities Timeline */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h3 className="text-base font-semibold text-gray-900 mb-4">Linked Activities ({activities.length})</h3>
+            <h3 className="text-base font-semibold text-gray-900 mb-4">Activity Timeline ({activities.length})</h3>
             {activities.length === 0 ? (
               <p className="text-gray-400 text-sm">No activities linked</p>
             ) : (
-              <div className="space-y-3">
-                {activities.map((a) => (
-                  <div key={a.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap mt-0.5 ${typeColors[a.type] ?? 'bg-gray-100 text-gray-700'}`}>
-                      {a.type}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800">{a.title}</p>
-                      {a.description && <p className="text-xs text-gray-500 mt-0.5 truncate">{a.description}</p>}
+              <div className="relative">
+                {/* Vertical line */}
+                <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-gray-100" />
+                <div className="space-y-4">
+                  {activities.map((a) => (
+                    <div key={a.id} className="relative flex items-start gap-4 pl-10">
+                      {/* Dot */}
+                      <div className={`absolute left-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${typeColors[a.type] ?? 'bg-gray-100 text-gray-700'}`}>
+                        {a.type?.[0]}
+                      </div>
+                      <div className={`flex-1 p-3 rounded-xl border ${a.done ? 'bg-gray-50 border-gray-100 opacity-70' : 'bg-white border-gray-200'}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-medium ${a.done ? 'line-through text-gray-400' : 'text-gray-800'}`}>{a.title}</p>
+                            {a.description && <p className="text-xs text-gray-400 mt-0.5 truncate">{a.description}</p>}
+                          </div>
+                          <div className="flex-shrink-0 text-right">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${typeColors[a.type] ?? 'bg-gray-100 text-gray-600'}`}>
+                              {a.type}
+                            </span>
+                            {a.due_date && (
+                              <p className="text-xs text-gray-400 mt-1">{format(new Date(a.due_date), 'MMM d, yyyy')}</p>
+                            )}
+                          </div>
+                        </div>
+                        {a.done && (
+                          <div className="flex items-center gap-1 mt-2">
+                            <svg className="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            <span className="text-xs text-green-600 font-medium">Completed</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex-shrink-0 text-right">
-                      {a.due_date && <p className="text-xs text-gray-400">{format(new Date(a.due_date), 'MMM d')}</p>}
-                      {a.done && <span className="text-xs text-green-600 font-medium">Done</span>}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </div>

@@ -11,6 +11,8 @@ import ContactDetail from './pages/ContactDetail'
 import Leads from './pages/Leads'
 import Pipeline from './pages/Pipeline'
 import Activities from './pages/Activities'
+import Team from './pages/Team'
+import Reports from './pages/Reports'
 
 function App() {
   return (
@@ -44,6 +46,8 @@ function App() {
             <Route path="leads" element={<Leads />} />
             <Route path="pipeline" element={<Pipeline />} />
             <Route path="activities" element={<Activities />} />
+            <Route path="team" element={<Team />} />
+            <Route path="reports" element={<Reports />} />
           </Route>
 
           {/* Catch-all */}

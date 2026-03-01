@@ -117,7 +117,8 @@ const KanbanColumn = ({ stage, deals, onDelete, onDealClick }) => {
   )
 }
 
-const DealDetailModal = ({ deal, open, onClose, activities }) => {
+const DealDetailModal = ({ deal, open, onClose, activities, stageHistory }) => {
+  const [tab, setTab] = useState('activities')
   if (!deal) return null
   return (
     <Modal open={open} onClose={onClose} title="Deal Details">
@@ -132,22 +133,73 @@ const DealDetailModal = ({ deal, open, onClose, activities }) => {
           <div className="flex gap-2"><dt className="text-gray-500 w-32">Close Date</dt><dd className="font-medium text-gray-800">{deal.expected_close_date ? format(new Date(deal.expected_close_date), 'MMM d, yyyy') : '—'}</dd></div>
           {deal.notes && <div className="pt-2 border-t border-gray-100"><dt className="text-gray-500 mb-1">Notes</dt><dd className="text-gray-700 whitespace-pre-wrap">{deal.notes}</dd></div>}
         </dl>
-        {activities.length > 0 && (
-          <div className="border-t border-gray-100 pt-4">
-            <h4 className="text-sm font-semibold text-gray-900 mb-2">Activities ({activities.length})</h4>
-            <div className="space-y-2">
-              {activities.map((a) => (
-                <div key={a.id} className="flex items-center gap-2 text-sm">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${a.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                    {a.type}
-                  </span>
-                  <span className="text-gray-700">{a.title}</span>
-                  {a.due_date && <span className="text-gray-400 text-xs ml-auto">{format(new Date(a.due_date), 'MMM d')}</span>}
-                </div>
-              ))}
-            </div>
+
+        {/* Tabs */}
+        <div className="border-t border-gray-100 pt-4">
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setTab('activities')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                tab === 'activities' ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Activities ({activities.length})
+            </button>
+            <button
+              onClick={() => setTab('history')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                tab === 'history' ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Stage History ({stageHistory.length})
+            </button>
           </div>
-        )}
+
+          {tab === 'activities' && (
+            activities.length === 0 ? (
+              <p className="text-sm text-gray-400">No activities yet</p>
+            ) : (
+              <div className="space-y-2">
+                {activities.map((a) => (
+                  <div key={a.id} className="flex items-center gap-2 text-sm">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${a.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                      {a.type}
+                    </span>
+                    <span className="text-gray-700">{a.title}</span>
+                    {a.due_date && <span className="text-gray-400 text-xs ml-auto">{format(new Date(a.due_date), 'MMM d')}</span>}
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {tab === 'history' && (
+            stageHistory.length === 0 ? (
+              <p className="text-sm text-gray-400">No stage changes recorded yet</p>
+            ) : (
+              <div className="relative">
+                <div className="absolute left-3 top-1 bottom-1 w-0.5 bg-gray-100" />
+                <div className="space-y-3">
+                  {stageHistory.map((h, i) => (
+                    <div key={i} className="relative flex items-center gap-3 pl-8">
+                      <div className="absolute left-0 w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-blue-500" />
+                      </div>
+                      <div className="flex-1 text-sm">
+                        <span className="text-gray-500 text-xs px-1.5 py-0.5 bg-gray-100 rounded">{h.from_stage ?? 'Start'}</span>
+                        <span className="mx-1.5 text-gray-400">→</span>
+                        <span className="text-gray-800 font-medium text-xs px-1.5 py-0.5 bg-blue-50 rounded">{h.to_stage}</span>
+                      </div>
+                      <span className="text-xs text-gray-400 flex-shrink-0">
+                        {h.changed_at ? format(new Date(h.changed_at), 'MMM d, h:mm a') : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          )}
+        </div>
       </div>
     </Modal>
   )
@@ -161,6 +213,7 @@ const Pipeline = () => {
   const [modalOpen, setModalOpen] = useState(false)
   const [detailDeal, setDetailDeal] = useState(null)
   const [detailActivities, setDetailActivities] = useState([])
+  const [detailHistory, setDetailHistory] = useState([])
   const [detailOpen, setDetailOpen] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
@@ -248,10 +301,15 @@ const Pipeline = () => {
   const handleDealClick = async (deal) => {
     setDetailDeal(deal)
     try {
-      const data = await api.get(`/deals/${deal.id}/activities`)
-      setDetailActivities(data ?? [])
+      const [acts, hist] = await Promise.all([
+        api.get(`/deals/${deal.id}/activities`),
+        api.get(`/deals/${deal.id}/history`),
+      ])
+      setDetailActivities(acts ?? [])
+      setDetailHistory(hist ?? [])
     } catch {
       setDetailActivities([])
+      setDetailHistory([])
     }
     setDetailOpen(true)
   }
@@ -387,6 +445,7 @@ const Pipeline = () => {
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         activities={detailActivities}
+        stageHistory={detailHistory}
       />
     </div>
   )

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import Modal from '../components/Modal'
@@ -8,6 +8,7 @@ import ErrorState from '../components/ErrorState'
 import Button from '../components/Button'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
+import { toCSV, downloadCSV, parseCSV, readFileAsText } from '../lib/csv'
 
 const ContactsIcon = () => (
   <svg className="w-12 h-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -16,6 +17,15 @@ const ContactsIcon = () => (
 )
 
 const emptyForm = { first_name: '', last_name: '', email: '', phone: '', company_name: '', notes: '' }
+
+const CSV_COLUMNS = [
+  { key: 'first_name',   label: 'First Name' },
+  { key: 'last_name',    label: 'Last Name' },
+  { key: 'email',        label: 'Email' },
+  { key: 'phone',        label: 'Phone' },
+  { key: 'company_name', label: 'Company' },
+  { key: 'notes',        label: 'Notes' },
+]
 
 const Contacts = () => {
   const navigate = useNavigate()
@@ -27,6 +37,50 @@ const Contacts = () => {
   const [editContact, setEditContact] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const importRef = useRef(null)
+
+  const handleExport = () => {
+    if (!contacts.length) { toast.error('No contacts to export'); return }
+    const csv = toCSV(contacts, CSV_COLUMNS)
+    downloadCSV(csv, `contacts-${new Date().toISOString().slice(0,10)}.csv`)
+    toast.success(`Exported ${contacts.length} contacts`)
+  }
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setImporting(true)
+    try {
+      const text = await readFileAsText(file)
+      const { rows } = parseCSV(text)
+      if (!rows.length) { toast.error('No rows found in CSV'); return }
+      let success = 0, failed = 0
+      for (const row of rows) {
+        const first = row['First Name'] ?? row['first_name'] ?? ''
+        const last  = row['Last Name']  ?? row['last_name']  ?? ''
+        if (!first.trim() && !last.trim()) { failed++; continue }
+        try {
+          await api.post('/contacts', {
+            first_name:   first.trim(),
+            last_name:    last.trim(),
+            email:        row['Email']   ?? row['email']   ?? '',
+            phone:        row['Phone']   ?? row['phone']   ?? '',
+            company_name: row['Company'] ?? row['company_name'] ?? '',
+            notes:        row['Notes']   ?? row['notes']   ?? '',
+          })
+          success++
+        } catch { failed++ }
+      }
+      toast.success(`Imported ${success} contacts${failed ? ` (${failed} skipped)` : ''}`)
+      fetchContacts()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const fetchContacts = async () => {
     setLoading(true)
@@ -115,12 +169,27 @@ const Contacts = () => {
           <h1 className="text-2xl font-bold text-gray-900">Contacts</h1>
           <p className="text-gray-500 mt-1">{contacts.length} total contacts</p>
         </div>
-        <Button onClick={openAdd}>
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add Contact
-        </Button>
+        <div className="flex items-center gap-2">
+          <input ref={importRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
+          <Button variant="secondary" size="sm" loading={importing} onClick={() => importRef.current?.click()}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Import
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleExport}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export
+          </Button>
+          <Button onClick={openAdd}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Contact
+          </Button>
+        </div>
       </div>
 
       {/* Search */}

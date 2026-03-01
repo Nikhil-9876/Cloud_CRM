@@ -1,5 +1,6 @@
 import { getUser, respond } from '../shared/auth.mjs'
 import { query } from '../shared/db.mjs'
+import { sendEmail, newLeadEmail } from '../shared/email.mjs'
 
 /**
  * Leads Lambda — handles all /leads routes:
@@ -46,7 +47,12 @@ export const handler = async (event) => {
          source || 'Website', status || 'New',
          assigned_to || null, notes || null]
       )
-      return respond(201, result.rows[0])
+      const lead = result.rows[0]
+      // Email notification (non-blocking)
+      if (process.env.NOTIFY_EMAIL) {
+        sendEmail({ to: process.env.NOTIFY_EMAIL, ...newLeadEmail(lead) })
+      }
+      return respond(201, lead)
     }
 
     // ── PUT /leads/{id} ────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import { getUser, respond } from '../shared/auth.mjs'
 import { query } from '../shared/db.mjs'
+import { sendEmail, dealStageEmail } from '../shared/email.mjs'
 
 /**
  * Deals Lambda — handles all /deals routes:
@@ -8,6 +9,7 @@ import { query } from '../shared/db.mjs'
  *   PUT    /deals/{id}               ← auto-creates follow-up activity on stage change
  *   DELETE /deals/{id}
  *   GET    /deals/{id}/activities
+ *   GET    /deals/{id}/history     ← stage change history
  *
  * Role-based access:
  *   admin     → sees ALL deals across all users
@@ -104,8 +106,16 @@ export const handler = async (event) => {
       )
       const updated = updateRes.rows[0]
 
-      // Auto-create follow-up activity when stage changes to a key stage
+      // If stage changed: record history, auto-activity, and send email
       if (stage && stage !== current.stage) {
+        // Record stage history
+        await query(
+          `INSERT INTO deal_stage_history (deal_id, from_stage, to_stage, user_id)
+           VALUES ($1,$2,$3,$4)`,
+          [id, current.stage, stage, userId]
+        )
+
+        // Auto-create follow-up activity
         const followup = STAGE_FOLLOWUP[stage]
         if (followup) {
           const dueDate = new Date()
@@ -123,6 +133,10 @@ export const handler = async (event) => {
             ]
           )
         }
+
+        // Email notification (non-blocking)
+        const emailPayload = dealStageEmail(updated, current.stage, stage)
+        sendEmail({ to: process.env.NOTIFY_EMAIL ?? '', ...emailPayload })
       }
 
       return respond(200, updated)
@@ -144,6 +158,17 @@ export const handler = async (event) => {
          WHERE deal_id=$1 AND ($3::boolean = true OR user_id = $2)
          ORDER BY due_date DESC`,
         [id, userId, isAdmin]
+      )
+      return respond(200, result.rows)
+    }
+
+    // ── GET /deals/{id}/history ────────────────────────────────────────────
+    if (method === 'GET' && resource === '/deals/{id}/history') {
+      const result = await query(
+        `SELECT * FROM deal_stage_history
+         WHERE deal_id = $1
+         ORDER BY changed_at ASC`,
+        [id]
       )
       return respond(200, result.rows)
     }
