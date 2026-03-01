@@ -1,0 +1,10 @@
+{
+  "name": "crm-lambda-functions",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AWS Lambda functions for CRM — API Gateway backend",
+  "dependencies": {
+    "aws-jwt-verify": "^4.0.1",
+    "pg": "^8.13.1"
+  }
+}
