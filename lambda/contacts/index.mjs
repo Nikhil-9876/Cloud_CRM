@@ -1,4 +1,4 @@
-import { getUserId, respond } from '../shared/auth.mjs'
+import { getUser, respond } from '../shared/auth.mjs'
 import { query } from '../shared/db.mjs'
 
 /**
@@ -10,13 +10,17 @@ import { query } from '../shared/db.mjs'
  *   DELETE /contacts/{id}
  *   GET    /contacts/{id}/deals
  *   GET    /contacts/{id}/activities
+ *
+ * Role-based access:
+ *   admin     → sees ALL contacts across all users (isAdmin = true)
+ *   sales_rep → sees only their own contacts (isAdmin = false)
  */
 export const handler = async (event) => {
   // Handle preflight OPTIONS
   if (event.httpMethod === 'OPTIONS') return respond(200)
 
   try {
-    const userId = await getUserId(event)
+    const { userId, isAdmin } = await getUser(event)
     const method = event.httpMethod
     const resource = event.resource           // e.g. /contacts/{id}/deals
     const id = event.pathParameters?.id ?? null
@@ -25,8 +29,10 @@ export const handler = async (event) => {
     // ── GET /contacts ──────────────────────────────────────────────────────
     if (method === 'GET' && resource === '/contacts') {
       const result = await query(
-        `SELECT * FROM contacts WHERE user_id = $1 ORDER BY created_at DESC`,
-        [userId]
+        `SELECT * FROM contacts
+         WHERE ($2::boolean = true OR user_id = $1)
+         ORDER BY created_at DESC`,
+        [userId, isAdmin]
       )
       return respond(200, result.rows)
     }
@@ -49,8 +55,9 @@ export const handler = async (event) => {
     // ── GET /contacts/{id} ──────────────────────────────────────────────────
     if (method === 'GET' && resource === '/contacts/{id}') {
       const result = await query(
-        `SELECT * FROM contacts WHERE id = $1 AND user_id = $2`,
-        [id, userId]
+        `SELECT * FROM contacts
+         WHERE id = $1 AND ($3::boolean = true OR user_id = $2)`,
+        [id, userId, isAdmin]
       )
       if (!result.rows.length) return respond(404, { error: 'Contact not found' })
       return respond(200, result.rows[0])
@@ -63,9 +70,9 @@ export const handler = async (event) => {
         `UPDATE contacts
            SET first_name=$1, last_name=$2, email=$3,
                phone=$4, company_name=$5, notes=$6
-         WHERE id=$7 AND user_id=$8 RETURNING *`,
+         WHERE id=$7 AND ($8::boolean = true OR user_id = $9) RETURNING *`,
         [first_name, last_name, email || null, phone || null,
-         company_name || null, notes || null, id, userId]
+         company_name || null, notes || null, id, isAdmin, userId]
       )
       if (!result.rows.length) return respond(404, { error: 'Contact not found' })
       return respond(200, result.rows[0])
@@ -73,15 +80,20 @@ export const handler = async (event) => {
 
     // ── DELETE /contacts/{id} ───────────────────────────────────────────────
     if (method === 'DELETE' && resource === '/contacts/{id}') {
-      await query(`DELETE FROM contacts WHERE id=$1 AND user_id=$2`, [id, userId])
+      await query(
+        `DELETE FROM contacts WHERE id=$1 AND ($3::boolean = true OR user_id = $2)`,
+        [id, userId, isAdmin]
+      )
       return respond(204)
     }
 
-    // ── GET /contacts/{id}/deals ────────────────────────────────────────────
+    // ── GET /contacts/{id}/deals ─────────────────────────────────────────────
     if (method === 'GET' && resource === '/contacts/{id}/deals') {
       const result = await query(
-        `SELECT * FROM deals WHERE contact_id=$1 AND user_id=$2 ORDER BY created_at DESC`,
-        [id, userId]
+        `SELECT * FROM deals
+         WHERE contact_id=$1 AND ($3::boolean = true OR user_id = $2)
+         ORDER BY created_at DESC`,
+        [id, userId, isAdmin]
       )
       return respond(200, result.rows)
     }
@@ -89,8 +101,10 @@ export const handler = async (event) => {
     // ── GET /contacts/{id}/activities ───────────────────────────────────────
     if (method === 'GET' && resource === '/contacts/{id}/activities') {
       const result = await query(
-        `SELECT * FROM activities WHERE contact_id=$1 AND user_id=$2 ORDER BY due_date DESC`,
-        [id, userId]
+        `SELECT * FROM activities
+         WHERE contact_id=$1 AND ($3::boolean = true OR user_id = $2)
+         ORDER BY due_date DESC`,
+        [id, userId, isAdmin]
       )
       return respond(200, result.rows)
     }

@@ -9,6 +9,7 @@ const Signup = () => {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [code, setCode] = useState('')
+  const [role, setRole] = useState('sales_rep')
   const [loading, setLoading] = useState(false)
   const { signUp, confirmSignUp } = useAuth()
   const navigate = useNavigate()
@@ -21,7 +22,7 @@ const Signup = () => {
     if (password.length < 8) { toast.error('Password must be at least 8 characters'); return }
     setLoading(true)
     try {
-      await signUp(email, password)
+      await signUp(email, password, role)
       toast.success('Verification code sent to your email!')
       setStep('confirm')
     } catch (err) {
@@ -105,6 +106,18 @@ const Signup = () => {
                 placeholder="••••••••"
                 required
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+              >
+                <option value="sales_rep">Sales Rep</option>
+                <option value="admin">Admin</option>
+              </select>
+              <p className="text-xs text-gray-400 mt-1">Admins can view all team data</p>
             </div>
             <button
               type="submit"

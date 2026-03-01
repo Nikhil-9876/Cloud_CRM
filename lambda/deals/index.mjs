@@ -1,4 +1,4 @@
-import { getUserId, respond } from '../shared/auth.mjs'
+import { getUser, respond } from '../shared/auth.mjs'
 import { query } from '../shared/db.mjs'
 
 /**
@@ -8,6 +8,10 @@ import { query } from '../shared/db.mjs'
  *   PUT    /deals/{id}               ← auto-creates follow-up activity on stage change
  *   DELETE /deals/{id}
  *   GET    /deals/{id}/activities
+ *
+ * Role-based access:
+ *   admin     → sees ALL deals across all users
+ *   sales_rep → sees only their own deals
  */
 
 // When a deal reaches these stages, a follow-up activity is auto-created
@@ -18,7 +22,7 @@ const STAGE_FOLLOWUP = {
   'Won':           { type: 'Meeting', title: 'Onboarding kickoff meeting', days: 3 },
 }
 
-// SQL to fetch deals with related contact name
+// SQL to fetch deals with related contact name — filter applied at call site
 const DEALS_WITH_CONTACT = `
   SELECT d.*,
     CASE WHEN c.id IS NOT NULL
@@ -27,14 +31,14 @@ const DEALS_WITH_CONTACT = `
     END AS contacts
   FROM deals d
   LEFT JOIN contacts c ON d.contact_id = c.id
-  WHERE d.user_id = $1
+  WHERE ($2::boolean = true OR d.user_id = $1)
 `
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return respond(200)
 
   try {
-    const userId = await getUserId(event)
+    const { userId, isAdmin } = await getUser(event)
     const method = event.httpMethod
     const resource = event.resource
     const id = event.pathParameters?.id ?? null
@@ -44,7 +48,7 @@ export const handler = async (event) => {
     if (method === 'GET' && resource === '/deals') {
       const result = await query(
         `${DEALS_WITH_CONTACT} ORDER BY d.created_at DESC`,
-        [userId]
+        [userId, isAdmin]
       )
       return respond(200, result.rows)
     }
@@ -71,8 +75,8 @@ export const handler = async (event) => {
     if (method === 'PUT' && resource === '/deals/{id}') {
       // Fetch current deal to detect stage change
       const currentRes = await query(
-        `SELECT * FROM deals WHERE id=$1 AND user_id=$2`,
-        [id, userId]
+        `SELECT * FROM deals WHERE id=$1 AND ($3::boolean = true OR user_id = $2)`,
+        [id, userId, isAdmin]
       )
       if (!currentRes.rows.length) return respond(404, { error: 'Deal not found' })
       const current = currentRes.rows[0]
@@ -90,13 +94,13 @@ export const handler = async (event) => {
         `UPDATE deals
            SET title=$1, value=$2, stage=$3,
                contact_id=$4, expected_close_date=$5, notes=$6
-         WHERE id=$7 AND user_id=$8 RETURNING *`,
+         WHERE id=$7 AND ($9::boolean = true OR user_id = $8) RETURNING *`,
         [title, Number(value ?? 0),
          stage || current.stage,
          contact_id ?? null,
          expected_close_date ?? null,
          notes ?? null,
-         id, userId]
+         id, userId, isAdmin]
       )
       const updated = updateRes.rows[0]
 
@@ -126,15 +130,20 @@ export const handler = async (event) => {
 
     // ── DELETE /deals/{id} ─────────────────────────────────────────────────
     if (method === 'DELETE' && resource === '/deals/{id}') {
-      await query(`DELETE FROM deals WHERE id=$1 AND user_id=$2`, [id, userId])
+      await query(
+        `DELETE FROM deals WHERE id=$1 AND ($3::boolean = true OR user_id = $2)`,
+        [id, userId, isAdmin]
+      )
       return respond(204)
     }
 
     // ── GET /deals/{id}/activities ─────────────────────────────────────────
     if (method === 'GET' && resource === '/deals/{id}/activities') {
       const result = await query(
-        `SELECT * FROM activities WHERE deal_id=$1 AND user_id=$2 ORDER BY due_date DESC`,
-        [id, userId]
+        `SELECT * FROM activities
+         WHERE deal_id=$1 AND ($3::boolean = true OR user_id = $2)
+         ORDER BY due_date DESC`,
+        [id, userId, isAdmin]
       )
       return respond(200, result.rows)
     }

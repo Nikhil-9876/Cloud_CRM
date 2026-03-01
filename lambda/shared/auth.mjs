@@ -52,13 +52,15 @@ function httpCodeName(code) {
 
 /**
  * Extract and verify the Cognito JWT from the Authorization header.
- * Returns the Cognito user's `sub` (unique user ID) on success.
- * Throws a 401 error if the header is missing or the token is invalid.
+ * Returns the full user context: { userId, role, isAdmin }.
+ *
+ * role comes from the Cognito custom attribute `custom:role`.
+ * Valid values: 'admin' | 'sales_rep'  (defaults to 'sales_rep' if missing).
  *
  * @param {object} event  API Gateway event object
- * @returns {Promise<string>}  Cognito user sub (used as user_id in DB)
+ * @returns {Promise<{ userId: string, role: string, isAdmin: boolean }>}
  */
-export async function getUserId(event) {
+export async function getUser(event) {
   const authHeader =
     event.headers?.Authorization ||
     event.headers?.authorization ||
@@ -72,10 +74,24 @@ export async function getUserId(event) {
 
   try {
     const payload = await verifier.verify(authHeader.slice(7))
-    return payload.sub   // Cognito unique user ID
+    const role = payload['custom:role'] ?? 'sales_rep'
+    return {
+      userId:  payload.sub,
+      role,
+      isAdmin: role === 'admin',
+    }
   } catch {
     const err = new Error('Token verification failed')
     err.statusCode = 401
     throw err
   }
+}
+
+/**
+ * Convenience wrapper — returns only the userId (backward compatible).
+ * New code should use getUser() to also get the role.
+ */
+export async function getUserId(event) {
+  const { userId } = await getUser(event)
+  return userId
 }

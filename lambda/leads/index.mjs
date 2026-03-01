@@ -1,4 +1,4 @@
-import { getUserId, respond } from '../shared/auth.mjs'
+import { getUser, respond } from '../shared/auth.mjs'
 import { query } from '../shared/db.mjs'
 
 /**
@@ -8,12 +8,16 @@ import { query } from '../shared/db.mjs'
  *   PUT    /leads/{id}
  *   DELETE /leads/{id}
  *   POST   /leads/{id}/convert   ← converts lead to a contact
+ *
+ * Role-based access:
+ *   admin     → sees ALL leads across all users
+ *   sales_rep → sees only their own leads
  */
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return respond(200)
 
   try {
-    const userId = await getUserId(event)
+    const { userId, isAdmin } = await getUser(event)
     const method = event.httpMethod
     const resource = event.resource
     const id = event.pathParameters?.id ?? null
@@ -22,8 +26,10 @@ export const handler = async (event) => {
     // ── GET /leads ─────────────────────────────────────────────────────────
     if (method === 'GET' && resource === '/leads') {
       const result = await query(
-        `SELECT * FROM leads WHERE user_id=$1 ORDER BY created_at DESC`,
-        [userId]
+        `SELECT * FROM leads
+         WHERE ($2::boolean = true OR user_id = $1)
+         ORDER BY created_at DESC`,
+        [userId, isAdmin]
       )
       return respond(200, result.rows)
     }
@@ -50,10 +56,10 @@ export const handler = async (event) => {
         `UPDATE leads
            SET name=$1, email=$2, source=$3,
                status=$4, assigned_to=$5, notes=$6
-         WHERE id=$7 AND user_id=$8 RETURNING *`,
+         WHERE id=$7 AND ($8::boolean = true OR user_id = $9) RETURNING *`,
         [name, email || null, source || 'Website',
          status || 'New', assigned_to || null, notes || null,
-         id, userId]
+         id, isAdmin, userId]
       )
       if (!result.rows.length) return respond(404, { error: 'Lead not found' })
       return respond(200, result.rows[0])
@@ -61,7 +67,10 @@ export const handler = async (event) => {
 
     // ── DELETE /leads/{id} ─────────────────────────────────────────────────
     if (method === 'DELETE' && resource === '/leads/{id}') {
-      await query(`DELETE FROM leads WHERE id=$1 AND user_id=$2`, [id, userId])
+      await query(
+        `DELETE FROM leads WHERE id=$1 AND ($3::boolean = true OR user_id = $2)`,
+        [id, userId, isAdmin]
+      )
       return respond(204)
     }
 
@@ -69,8 +78,8 @@ export const handler = async (event) => {
     // One-click: create a Contact from the lead and mark the lead Qualified.
     if (method === 'POST' && resource === '/leads/{id}/convert') {
       const leadRes = await query(
-        `SELECT * FROM leads WHERE id=$1 AND user_id=$2`,
-        [id, userId]
+        `SELECT * FROM leads WHERE id=$1 AND ($3::boolean = true OR user_id = $2)`,
+        [id, userId, isAdmin]
       )
       if (!leadRes.rows.length) return respond(404, { error: 'Lead not found' })
       const lead = leadRes.rows[0]
@@ -87,8 +96,8 @@ export const handler = async (event) => {
       )
 
       await query(
-        `UPDATE leads SET status='Qualified' WHERE id=$1 AND user_id=$2`,
-        [id, userId]
+        `UPDATE leads SET status='Qualified' WHERE id=$1 AND ($3::boolean = true OR user_id = $2)`,
+        [id, userId, isAdmin]
       )
 
       return respond(201, contactRes.rows[0])

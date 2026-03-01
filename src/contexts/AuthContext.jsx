@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import {
   getCurrentUser,
+  fetchAuthSession,
   signIn as amplifySignIn,
   signOut as amplifySignOut,
   signUp as amplifySignUp,
@@ -11,6 +12,7 @@ const AuthContext = createContext({})
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
+  const [role, setRole] = useState('sales_rep')
   const [loading, setLoading] = useState(true)
 
   // Load the currently signed-in Cognito user on mount
@@ -18,8 +20,13 @@ export const AuthProvider = ({ children }) => {
     try {
       const u = await getCurrentUser()
       setUser(u)
+      // Extract role from the ID-token claims
+      const session = await fetchAuthSession()
+      const claims = session.tokens?.idToken?.payload ?? {}
+      setRole(claims['custom:role'] ?? 'sales_rep')
     } catch {
       setUser(null)
+      setRole('sales_rep')
     }
   }
 
@@ -39,13 +46,15 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Register a new user. Cognito sends a verification code to the email.
-   * Returns Amplify's SignUpOutput.
+   * @param {string} email
+   * @param {string} password
+   * @param {string} [role='sales_rep']  'admin' | 'sales_rep'
    */
-  const signUp = (email, password) =>
+  const signUp = (email, password, role = 'sales_rep') =>
     amplifySignUp({
       username: email,
       password,
-      options: { userAttributes: { email } },
+      options: { userAttributes: { email, 'custom:role': role } },
     })
 
   /**
@@ -57,10 +66,13 @@ export const AuthProvider = ({ children }) => {
   const signOut = async () => {
     await amplifySignOut()
     setUser(null)
+    setRole('sales_rep')
   }
 
+  const isAdmin = role === 'admin'
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, confirmSignUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, role, isAdmin, signIn, signUp, confirmSignUp, signOut }}>
       {children}
     </AuthContext.Provider>
   )

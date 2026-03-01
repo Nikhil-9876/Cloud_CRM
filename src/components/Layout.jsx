@@ -52,7 +52,7 @@ const navItems = [
 ]
 
 const Layout = () => {
-  const { user, signOut } = useAuth()
+  const { user, isAdmin, signOut } = useAuth()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -121,6 +121,11 @@ const Layout = () => {
           <div className="px-3 mb-2">
             <p className="text-xs text-white/50 uppercase tracking-wider font-medium">Account</p>
             <p className="text-sm text-white/80 truncate mt-0.5">{user?.signInDetails?.loginId}</p>
+            {isAdmin && (
+              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                Admin
+              </span>
+            )}
           </div>
           <button
             onClick={handleLogout}
@@ -149,9 +154,14 @@ const Layout = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <div className="text-sm text-gray-500 hidden sm:block">
+            <div className="text-sm text-gray-500 hidden sm:block flex items-center gap-2">
               Welcome back,{' '}
               <span className="font-medium text-gray-800">{user?.signInDetails?.loginId}</span>
+              {isAdmin && (
+                <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                  Admin
+                </span>
+              )}
             </div>
           </div>
           <button

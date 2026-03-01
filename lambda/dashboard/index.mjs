@@ -1,4 +1,4 @@
-import { getUserId, respond } from '../shared/auth.mjs'
+import { getUser, respond } from '../shared/auth.mjs'
 import { query } from '../shared/db.mjs'
 
 /**
@@ -10,7 +10,7 @@ export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return respond(200)
 
   try {
-    const userId = await getUserId(event)
+    const { userId, isAdmin } = await getUser(event)
 
     const now = new Date()
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
@@ -27,16 +27,16 @@ export const handler = async (event) => {
       recentRes,
       overdueRes,
     ] = await Promise.all([
-      query(`SELECT COUNT(*)::int AS c FROM contacts   WHERE user_id=$1`, [userId]),
-      query(`SELECT COUNT(*)::int AS c FROM leads      WHERE user_id=$1`, [userId]),
-      query(`SELECT COUNT(*)::int AS c FROM deals      WHERE user_id=$1 AND stage NOT IN ('Won','Lost')`, [userId]),
+      query(`SELECT COUNT(*)::int AS c FROM contacts   WHERE ($2::boolean = true OR user_id=$1)`, [userId, isAdmin]),
+      query(`SELECT COUNT(*)::int AS c FROM leads      WHERE ($2::boolean = true OR user_id=$1)`, [userId, isAdmin]),
+      query(`SELECT COUNT(*)::int AS c FROM deals      WHERE ($2::boolean = true OR user_id=$1) AND stage NOT IN ('Won','Lost')`, [userId, isAdmin]),
       query(
         `SELECT COUNT(*)::int AS c FROM deals
-         WHERE user_id=$1 AND stage='Won'
-           AND created_at>=$2 AND created_at<=$3`,
-        [userId, monthStart, monthEnd]
+         WHERE ($2::boolean = true OR user_id=$1) AND stage='Won'
+           AND created_at>=$3 AND created_at<=$4`,
+        [userId, isAdmin, monthStart, monthEnd]
       ),
-      query(`SELECT COUNT(*)::int AS c FROM activities WHERE user_id=$1 AND done=false`, [userId]),
+      query(`SELECT COUNT(*)::int AS c FROM activities WHERE ($2::boolean = true OR user_id=$1) AND done=false`, [userId, isAdmin]),
       // 5 most recent activities with contact name
       query(
         `SELECT a.id, a.title, a.type, a.due_date, a.done,
@@ -46,9 +46,9 @@ export const handler = async (event) => {
            END AS contacts
          FROM activities a
          LEFT JOIN contacts c ON a.contact_id = c.id
-         WHERE a.user_id=$1
+         WHERE ($2::boolean = true OR a.user_id=$1)
          ORDER BY a.created_at DESC LIMIT 5`,
-        [userId]
+        [userId, isAdmin]
       ),
       // Overdue open deals with contact name
       query(
@@ -59,12 +59,12 @@ export const handler = async (event) => {
            END AS contacts
          FROM deals d
          LEFT JOIN contacts c ON d.contact_id = c.id
-         WHERE d.user_id=$1
+         WHERE ($2::boolean = true OR d.user_id=$1)
            AND d.stage NOT IN ('Won','Lost')
            AND d.expected_close_date IS NOT NULL
-           AND d.expected_close_date < $2
+           AND d.expected_close_date < $3
          ORDER BY d.expected_close_date ASC`,
-        [userId, today]
+        [userId, isAdmin, today]
       ),
     ])
 

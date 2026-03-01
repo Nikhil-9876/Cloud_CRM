@@ -1,4 +1,4 @@
-import { getUserId, respond } from '../shared/auth.mjs'
+import { getUser, respond } from '../shared/auth.mjs'
 import { query } from '../shared/db.mjs'
 
 /**
@@ -23,14 +23,14 @@ const ACTIVITIES_WITH_JOINS = `
   FROM activities a
   LEFT JOIN contacts c ON a.contact_id = c.id
   LEFT JOIN deals    d ON a.deal_id    = d.id
-  WHERE a.user_id = $1
+  WHERE ($2::boolean = true OR a.user_id = $1)
 `
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return respond(200)
 
   try {
-    const userId = await getUserId(event)
+    const { userId, isAdmin } = await getUser(event)
     const method = event.httpMethod
     const resource = event.resource
     const id = event.pathParameters?.id ?? null
@@ -40,7 +40,7 @@ export const handler = async (event) => {
     if (method === 'GET' && resource === '/activities') {
       const result = await query(
         `${ACTIVITIES_WITH_JOINS} ORDER BY a.due_date DESC`,
-        [userId]
+        [userId, isAdmin]
       )
       return respond(200, result.rows)
     }
@@ -78,14 +78,14 @@ export const handler = async (event) => {
                deal_id     = $5,
                due_date    = $6,
                done        = COALESCE($7, done)
-         WHERE id=$8 AND user_id=$9 RETURNING *`,
+         WHERE id=$8 AND ($10::boolean = true OR user_id = $9) RETURNING *`,
         [type ?? null, title ?? null,
          description ?? null,
          contact_id ?? null,
          deal_id ?? null,
          due_date ?? null,
          done ?? null,
-         id, userId]
+         id, userId, isAdmin]
       )
       if (!result.rows.length) return respond(404, { error: 'Activity not found' })
       return respond(200, result.rows[0])
@@ -93,7 +93,7 @@ export const handler = async (event) => {
 
     // ── DELETE /activities/{id} ────────────────────────────────────────────
     if (method === 'DELETE' && resource === '/activities/{id}') {
-      await query(`DELETE FROM activities WHERE id=$1 AND user_id=$2`, [id, userId])
+      await query(`DELETE FROM activities WHERE id=$1 AND ($3::boolean = true OR user_id = $2)`, [id, userId, isAdmin])
       return respond(204)
     }
 
