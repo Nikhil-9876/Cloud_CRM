@@ -153,8 +153,17 @@ const Leads = () => {
   }
 
   const handleStatusChange = async (id, status) => {
+    const lead = leads.find((l) => l.id === id)
+    if (!lead) return
     try {
-      await api.put(`/leads/${id}`, { status })
+      await api.put(`/leads/${id}`, {
+        name:        lead.name,
+        email:       lead.email ?? '',
+        source:      lead.source ?? 'Website',
+        status,
+        assigned_to: lead.assigned_to ?? '',
+        notes:       lead.notes ?? '',
+      })
       setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)))
       toast.success('Status updated')
     } catch (err) {
