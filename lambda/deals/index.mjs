@@ -1,6 +1,6 @@
 import { getUser, respond } from '../shared/auth.mjs'
 import { query } from '../shared/db.mjs'
-import { sendEmail, dealStageEmail } from '../shared/email.mjs'
+import { sendEmail, dealStageEmail, taskAssignedEmail } from '../shared/email.mjs'
 
 /**
  * Deals Lambda — handles all /deals routes:
@@ -120,10 +120,10 @@ export const handler = async (event) => {
         if (followup) {
           const dueDate = new Date()
           dueDate.setDate(dueDate.getDate() + followup.days)
-          await query(
+          const actResult = await query(
             `INSERT INTO activities
                (user_id, deal_id, contact_id, type, title, description, due_date, done)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,false)`,
+             VALUES ($1,$2,$3,$4,$5,$6,$7,false) RETURNING *`,
             [
               userId, id, updated.contact_id ?? null,
               followup.type,
@@ -132,6 +132,20 @@ export const handler = async (event) => {
               dueDate.toISOString(),
             ]
           )
+          const newActivity = actResult.rows[0]
+
+          // Email the linked contact about the new task (non-blocking)
+          if (updated.contact_id) {
+            const contactRes = await query(
+              `SELECT first_name, last_name, email FROM contacts WHERE id=$1`,
+              [updated.contact_id]
+            )
+            const contact = contactRes.rows[0]
+            if (contact?.email) {
+              const emailPayload = taskAssignedEmail(contact, newActivity, updated.title)
+              sendEmail({ to: contact.email, ...emailPayload })
+            }
+          }
         }
 
         // Email notification (non-blocking)

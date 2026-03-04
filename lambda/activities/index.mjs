@@ -1,5 +1,6 @@
 import { getUser, respond } from '../shared/auth.mjs'
 import { query } from '../shared/db.mjs'
+import { sendEmail, taskAssignedEmail } from '../shared/email.mjs'
 
 /**
  * Activities Lambda — handles all /activities routes:
@@ -63,7 +64,23 @@ export const handler = async (event) => {
          due_date || null,
          done ?? false]
       )
-      return respond(201, result.rows[0])
+      const activity = result.rows[0]
+
+      // Send email to the linked contact (non-blocking)
+      if (contact_id) {
+        const [contactRes, dealRes] = await Promise.all([
+          query(`SELECT first_name, last_name, email FROM contacts WHERE id=$1`, [contact_id]),
+          deal_id ? query(`SELECT title FROM deals WHERE id=$1`, [deal_id]) : Promise.resolve({ rows: [] }),
+        ])
+        const contact = contactRes.rows[0]
+        if (contact?.email) {
+          const dealTitle = dealRes.rows[0]?.title ?? null
+          const emailPayload = taskAssignedEmail(contact, activity, dealTitle)
+          sendEmail({ to: contact.email, ...emailPayload })
+        }
+      }
+
+      return respond(201, activity)
     }
 
     // ── PUT /activities/{id} ───────────────────────────────────────────────

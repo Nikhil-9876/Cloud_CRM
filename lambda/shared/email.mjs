@@ -65,3 +65,33 @@ export function dealStageEmail(deal, fromStage, toStage) {
     text: `Deal "${deal.title}" moved from ${fromStage} → ${toStage}. Value: $${deal.value}`,
   }
 }
+
+/**
+ * Email sent to a contact when a task/activity is assigned to them.
+ *
+ * @param {{ first_name: string, last_name: string }} contact
+ * @param {{ type: string, title: string, description?: string, due_date?: string }} activity
+ * @param {string} [dealTitle]
+ */
+export function taskAssignedEmail(contact, activity, dealTitle) {
+  const name = `${contact.first_name ?? ''} ${contact.last_name ?? ''}`.trim() || 'there'
+  const dueDateStr = activity.due_date
+    ? new Date(activity.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null
+  return {
+    subject: `📋 New task for you: ${activity.title}`,
+    html: `
+      <h2 style="font-family:sans-serif;">📋 A new task has been assigned to you</h2>
+      <p style="font-family:sans-serif;">Hi ${name},</p>
+      <p style="font-family:sans-serif;">A new task has been created that involves you:</p>
+      <table style="font-family:sans-serif;border-collapse:collapse;">
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Task</td><td>${activity.title}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Type</td><td>${activity.type ?? '—'}</td></tr>
+        ${dealTitle ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Deal</td><td>${dealTitle}</td></tr>` : ''}
+        ${dueDateStr ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Due Date</td><td>${dueDateStr}</td></tr>` : ''}
+        ${activity.description ? `<tr><td style="padding:4px 12px 4px 0;font-weight:bold;">Notes</td><td>${activity.description}</td></tr>` : ''}
+      </table>
+      <p style="font-family:sans-serif;color:#6b7280;font-size:13px;margin-top:24px;">You are receiving this because you are linked as a contact in our CRM.</p>`,
+    text: `Hi ${name}, a new task "${activity.title}" (${activity.type ?? ''}) has been created for you${dueDateStr ? `, due ${dueDateStr}` : ''}.${activity.description ? ' Notes: ' + activity.description : ''}`,
+  }
+}
